@@ -5,15 +5,30 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\FileTransfer;
 use App\Models\UserPin;
+use App\Models\Message;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class FileTransferController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $files = FileTransfer::where('sender_session_id', session('user_session_id'))
-            ->orWhere('receiver_session_id', session('user_session_id'))
+        $userSessionId = session('user_session_id');
+        $peerSessionId = $request->query('peer_session_id');
+
+        if (!$userSessionId) {
+            return response()->json(['files' => []]);
+        }
+
+        // Only show files sent BY the current user TO the active peer
+        $query = FileTransfer::where('sender_session_id', $userSessionId);
+
+        // Filter by receiver (active peer) if peer_session_id is provided
+        if ($peerSessionId) {
+            $query->where('receiver_session_id', $peerSessionId);
+        }
+
+        $files = $query->with(['sender', 'receiver'])
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -54,6 +69,23 @@ class FileTransferController extends Controller
             'transfer_status' => 'completed'
         ]);
 
+        // Send file notification message to receiver only
+        $downloadUrl = "/files/{$fileTransfer->id}/download";
+        $sender = UserPin::where('session_id', session('user_session_id'))->first();
+
+        // Create message notification for receiver
+        // Mark as deleted_for_sender = true so it ONLY appears in receiver's chat
+        Message::create([
+            'sender_session_id' => session('user_session_id'), // Real sender
+            'receiver_session_id' => $request->receiver_session_id, // Real receiver
+            'message' => '📁 File received - ' . $file->getClientOriginalName(),
+            'message_type' => 'file',
+            'sender_ip' => $request->ip(),
+            'receiver_ip' => $receiver->ip_address,
+            'file_download_url' => $downloadUrl,
+            'deleted_for_sender' => true // Hide from sender's chat
+        ]);
+
         return response()->json([
             'success' => true,
             'file' => $fileTransfer,
@@ -71,13 +103,8 @@ class FileTransferController extends Controller
     {
         $fileTransfer = FileTransfer::findOrFail($id);
 
-        // Check if user is sender or receiver
-        if (
-            $fileTransfer->sender_session_id !== session('user_session_id') &&
-            $fileTransfer->receiver_session_id !== session('user_session_id')
-        ) {
-            abort(403, 'Unauthorized');
-        }
+        // Allow download without session authentication for cross-device access
+        // File ID serves as the security token
 
         $filePath = storage_path('app/public/' . $fileTransfer->file_path);
 

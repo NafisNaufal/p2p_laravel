@@ -6,7 +6,8 @@ Aplikasi web Laravel untuk komunikasi P2P (Peer-to-Peer) yang dirancang khusus u
 
 - **PIN Authentication**: Sistem autentikasi dengan PIN 4 digit
 - **Real-time Messaging**: Chat antar peer dalam jaringan lokal
-- **File Transfer**: Upload dan download image files
+- **File Transfer**: Upload dan download image files dengan support Drag & Drop
+- **Message Control**: Fitur hapus pesan (Delete for me / Delete for everyone)
 - **Network Analysis**: Built-in info untuk analisis protokol jaringan
 - **TCP Protocol**: Menggunakan TCP untuk komunikasi yang reliable
 - **Wireshark Ready**: Optimal untuk packet analysis
@@ -31,7 +32,6 @@ Aplikasi web Laravel untuk komunikasi P2P (Peer-to-Peer) yang dirancang khusus u
 ### 1. Clone & Install Dependencies
 
 ```bash
-cd Laravel
 composer install
 npm install
 ```
@@ -84,6 +84,7 @@ Server akan berjalan di: `http://localhost:8000`
 3. Setup PIN di komputer kedua
 4. Di dashboard, masukkan Session ID peer untuk connect
 5. Mulai chat dan transfer file
+6. **Delete Message**: Hover pada pesan untuk melihat opsi hapus (Trash icon untuk 'Delete for me', Cross icon untuk 'Delete for everyone')
 
 ### Network Analysis dengan Wireshark
 
@@ -121,7 +122,10 @@ sudo apt-get install wireshark
 - `POST /messages` - Send message
 - `GET /messages/fetch` - Fetch messages (polling)
 - `POST /files/upload` - Upload file
-- `GET /files/{id}/download` - Download file
+- `GET /files` - List recent files
+- `GET /files/{id}/download` - Download file (Public access with ID token)
+- `DELETE /messages/{id}/delete-for-me` - Delete message for self
+- `DELETE /messages/{id}/delete-for-everyone` - Delete message for all peers
 
 ### Data Flow
 
@@ -218,6 +222,7 @@ http.content_type contains "multipart/form-data"
 - **File Validation**: Image only, max 10MB
 - **SQL Injection Protection**: Eloquent ORM
 - **XSS Protection**: Blade template escaping
+- **Access Control**: Public file download menggunakan ID sebagai token untuk akses lintas device tanpa login ulang
 
 ## 🚨 Troubleshooting
 

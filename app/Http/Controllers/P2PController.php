@@ -32,14 +32,14 @@ class P2PController extends Controller
     {
         $request->validate([
             'pin' => 'required|digits:4',
-            'username' => 'nullable|string|max:50'
+            'username' => 'required|string|max:50'
         ]);
 
         $sessionId = Str::uuid();
         $userPin = new UserPin();
         $userPin->session_id = $sessionId;
         $userPin->setPin($request->pin);
-        $userPin->username = $request->username ?? 'Anonymous';
+        $userPin->username = $request->username;
         $userPin->ip_address = $request->ip();
         $userPin->save();
 

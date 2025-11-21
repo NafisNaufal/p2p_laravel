@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Message;
 use App\Models\UserPin;
+use Illuminate\Support\Facades\Log;
 
 class MessageController extends Controller
 {
@@ -65,24 +66,108 @@ class MessageController extends Controller
             return response()->json(['messages' => []]);
         }
 
-        $messages = Message::where(function ($query) use ($peerSessionId) {
-            $query->where('sender_session_id', session('user_session_id'))
-                ->where('receiver_session_id', $peerSessionId);
-        })
-            ->orWhere(function ($query) use ($peerSessionId) {
-                $query->where('sender_session_id', $peerSessionId)
-                    ->where('receiver_session_id', session('user_session_id'));
+        $currentUserSessionId = session('user_session_id');
+
+        $currentUserSessionId = (string) $currentUserSessionId;
+        $peerSessionId = (string) $peerSessionId;
+
+        $messages = Message::where(function ($query) use ($peerSessionId, $currentUserSessionId) {
+            // Get all messages between current user and peer
+            $query->where(function ($q) use ($currentUserSessionId, $peerSessionId) {
+                $q->where('sender_session_id', $currentUserSessionId)
+                    ->where('receiver_session_id', $peerSessionId);
             })
+                ->orWhere(function ($q) use ($peerSessionId, $currentUserSessionId) {
+                    $q->where('sender_session_id', $peerSessionId)
+                        ->where('receiver_session_id', $currentUserSessionId);
+                });
+        })
+            ->where(function ($query) use ($currentUserSessionId) {
+                // Filter out messages deleted by current user
+                $query->where(function ($q) use ($currentUserSessionId) {
+                    // If current user is sender, check deleted_for_sender
+                    $q->where('sender_session_id', $currentUserSessionId)
+                        ->where('deleted_for_sender', false);
+                })
+                    ->orWhere(function ($q) use ($currentUserSessionId) {
+                        // If current user is receiver, check deleted_for_receiver
+                        $q->where('receiver_session_id', $currentUserSessionId)
+                            ->where('deleted_for_receiver', false);
+                    });
+            })
+            ->with(['sender', 'receiver'])
             ->orderBy('created_at', 'asc')
             ->get();
 
         return response()->json([
             'messages' => $messages,
+            'current_user_session_id' => $currentUserSessionId,
             'network_info' => [
                 'protocol' => 'TCP',
                 'method' => 'GET',
                 'timestamp' => now()->toISOString()
             ]
         ]);
+    }
+
+    public function deleteForMe(Request $request, $messageId)
+    {
+        $message = Message::findOrFail($messageId);
+        $currentUserSessionId = (string) session('user_session_id');
+        $messageSenderId = (string) $message->sender_session_id;
+        $messageReceiverId = (string) $message->receiver_session_id;
+
+        // Debug logging
+        Log::info('Delete for me attempt:', [
+            'message_id' => $messageId,
+            'message_sender' => $messageSenderId,
+            'message_receiver' => $messageReceiverId,
+            'current_user' => $currentUserSessionId
+        ]);
+
+        // Check if user is sender or receiver
+        if ($messageSenderId === $currentUserSessionId) {
+            $message->deleted_for_sender = true;
+        } elseif ($messageReceiverId === $currentUserSessionId) {
+            $message->deleted_for_receiver = true;
+        } else {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $message->save();
+
+        return response()->json(['success' => true]);
+    }
+
+    public function deleteForEveryone(Request $request, $messageId)
+    {
+        $message = Message::findOrFail($messageId);
+        $currentUserSessionId = (string) session('user_session_id');
+        $messageSenderId = (string) $message->sender_session_id;
+
+        // Debug logging
+        Log::info('Delete for everyone attempt:', [
+            'message_id' => $messageId,
+            'message_sender' => $messageSenderId,
+            'current_user' => $currentUserSessionId,
+            'match' => $messageSenderId === $currentUserSessionId
+        ]);
+
+        // Only sender can delete for everyone
+        if ($messageSenderId !== $currentUserSessionId) {
+            return response()->json([
+                'error' => 'Only sender can delete for everyone',
+                'debug' => [
+                    'message_sender' => $messageSenderId,
+                    'current_user' => $currentUserSessionId,
+                    'match' => $messageSenderId === $currentUserSessionId
+                ]
+            ], 403);
+        }
+
+        // Physically delete the message from database (Option A)
+        $message->delete();
+
+        return response()->json(['success' => true, 'message_id' => $messageId]);
     }
 }

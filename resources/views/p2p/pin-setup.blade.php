@@ -15,11 +15,14 @@
 
                 <div>
                     <label for="username" class="block text-sm font-medium text-gray-700 mb-2">
-                        Username (Opsional)
+                        Username *
                     </label>
-                    <input type="text" id="username" name="username" value="{{ old('username') }}"
+                    <input type="text" id="username" name="username" value="{{ old('username') }}" required
                         placeholder="Masukkan username Anda"
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('username') border-red-500 @enderror">
+                    @error('username')
+                        <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
+                    @enderror
                 </div>
 
                 <div>

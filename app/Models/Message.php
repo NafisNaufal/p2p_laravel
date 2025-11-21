@@ -13,11 +13,18 @@ class Message extends Model
         'message_type',
         'sender_ip',
         'receiver_ip',
-        'is_delivered'
+        'is_delivered',
+        'deleted_for_sender',
+        'deleted_for_receiver',
+        'deleted_for_everyone',
+        'file_download_url'
     ];
 
     protected $casts = [
-        'is_delivered' => 'boolean'
+        'is_delivered' => 'boolean',
+        'deleted_for_sender' => 'boolean',
+        'deleted_for_receiver' => 'boolean',
+        'deleted_for_everyone' => 'boolean'
     ];
 
     public function sender()
